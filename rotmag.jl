@@ -1,18 +1,28 @@
+module Rotmag
 using Printf
 using Polynomials
+
+# export solvemag, solvepoint, test_export, R☉
+
 
 const R☉ = 6.955e10
 const M☉ = 1.989e33
 const year_seconds = 3.155e7
 const G = 6.67259e-8
-const σ = 5.67e-5
+const σ = 5.77e-5
+const test_export = 0.223456789
 
 struct Star{T<:Real}
 	R::T
 	M::T
 	v_esc::T
 	v_eq::T
-	Star(R, M, v_eq) = new{typeof(R)}(R*R☉, M*M☉, √(2*G*M/R*M☉/R☉), v_eq*1e5)
+	function Star(R, M, v_eq)
+		_R = float(R)
+		_M = float(M)
+		_v_eq = float(v_eq) 
+    	new{typeof(_R)}(_R*R☉, _M*M☉, √(2*G*_M/_R*M☉/R☉), _v_eq*1e5)
+	end
 end
 
 struct Magnetosphere{T<:Real}
@@ -20,7 +30,13 @@ struct Magnetosphere{T<:Real}
 	r_mo::T
 	M_dot::T
 	v_start::T
-	Magnetosphere(r_mi, r_mo, M_dot, v_start) = new{typeof(r_mi)}(r_mi, r_mo, M_dot, v_start*1e5)
+	function Magnetosphere(r_mi, r_mo, M_dot, v_start)
+			_r_mi = float(r_mi)
+			_r_mo = float(r_mo)
+			_M_dot = float(M_dot)
+			_v_start = float(v_start)
+    	new{typeof(r_mi)}(_r_mi, _r_mo, _M_dot, _v_start*1e5)
+	end
 end
 
 
@@ -103,6 +119,8 @@ function solvemag(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 
 		print(out, "\n")
 	end
 	close(out)
+	return 0
+end
 end
 
 
