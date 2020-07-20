@@ -235,6 +235,37 @@ function solvemag(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 
 	# close(out)
 	return r_m_grid, θ_grid, v_p_grid, v_t_grid, source_grid
 end
+
+function magvel(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 :: Int, file = "rotmag.dat")
+	# out = open(file, "w")
+	B_star = surfmagfield(mag.M_dot, mag.r_mi, star)
+	θ_grid = zeros((n_θ, n_r))
+	r_m_grid = zeros((n_θ, n_r))
+	v_p_grid = zeros((n_θ, n_r))
+	v_t_grid = zeros((n_θ, n_r))
+	source_grid = zeros((n_θ, n_r))
+	for i=1:n_r
+		r_m = mag.r_mi + (i-1)*(mag.r_mo-mag.r_mi)/(n_r-1)
+		θ_s = asin(√(1/r_m))
+		# solve_start = [star.v_esc/B_star, 0]
+		for j=1:n_θ
+			θ = π/2 - (j)*(π/2 - θ_s)/(n_θ)
+			r = r_m*sin(θ)^2
+			r_m_grid[j,i] = r_m
+			θ_grid[j,i] = θ
+			B_p = dipolefield(B_star, r_m*sin(θ)^2, r_m)
+			v_p, v_t = nonsolidrotation(r, θ, star, mag)
+			v_t_grid[j,i] = v_t
+			v_p_grid[j,i] = v_p
+			v_rot = star.v_eq*r_m*sin(θ)^3
+			# @printf(out, "%8.f %8.f %8.f %8.f %8.f %8.f\n", r_m, θ, v_p*1e-5, v_t*1e-5, v_ff*1e-5, v_rot*1e-5)
+		end
+		# print(out, "\n")
+	end
+	# close(out)
+	return r_m_grid, θ_grid, v_p_grid, v_t_grid
+end
+
 end
 
 
