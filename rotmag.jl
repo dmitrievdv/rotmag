@@ -98,6 +98,11 @@ function nonsolidrotation(r :: Real, θ :: Real, star :: Star, mag :: Magnetosph
 	v_ff = freefallvelocity(r, θ, star)
 	v_eq = star.v_eq*1e5
 	v_po = mag.v_start*1e5
+	if star.v_eq ≈ 0.0 
+		v_p = √(v_po^2 + v_ff^2)
+		v_t = 0.0
+		return [v_p, v_t]
+	end
 	ρ = r_m^2 - R^2
 	E = v_po^2 + v_ff^2 - v_eq^2*ρ
 	P = constructpolynomial(ρ, E, R, v_eq, Bp, η)
@@ -125,6 +130,11 @@ function velocityjacobian(r :: Real, θ :: Real, v_p :: Real, v_t :: Real, star 
 	∇v_ff = freefallvelocitygradient(r, θ, star)
 	v_eq = star.v_eq*1e5
 	v_po = mag.v_start*1e5
+	if star.v_eq ≈ 0.0
+		∇v_t = [0, 0] 
+		∇v_p = [-v_ff^2/v_p/(2r), -v_ff^2/v_p*tan(θ)]
+		return ∇v_p, ∇v_t
+	end
 	∇r_m = [1/sin(θ)^2, -2r/sin(θ)^3*cos(θ)]
 	∇R = [sin(θ), r*cos(θ)]
 	ρ = r_m^2 - R^2
@@ -137,7 +147,7 @@ function velocityjacobian(r :: Real, θ :: Real, v_p :: Real, v_t :: Real, star 
 	x = v_t/v_eq
 	∇v_t = -v_eq*[∇P[1](x)/dP(x), ∇P[2](x)/dP(x)]
 	∇v_p = @. 1/v_p*(∇E/2 - v_t*∇v_t)
-	return [∇v_p, ∇v_t]
+	return ∇v_p, ∇v_t
 end
 
 function covariantvelocityjacobian(r, θ, v_p, v_t, ∇v_p, ∇v_t)

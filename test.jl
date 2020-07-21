@@ -6,7 +6,7 @@ include("rotmag.jl")
 import .Rotmag
 
 star_fast = Rotmag.Star(v_eq = 35)
-star_slow = Rotmag.Star(v_eq = 1)
+star_slow = Rotmag.Star(v_eq = 0)
 mag = Rotmag.Magnetosphere(2, 3, 1e-7, 10)
 
 function testderivative(r_m, star, mag; eps = 1e-6, n_θ = 20)
@@ -32,11 +32,14 @@ end
 
 
 # testderivative(2.5, star_fast, mag, eps = 1e-5)
+# testderivative(2.5, star_slow, mag, eps = 1e-5)
 
-r_ms, θs, v_ps, v_ts, n_u, n_l = Rotmag.solvemag(star_fast, mag, n_r = 3)
+r_ms, θs, v_ps, v_ts, n_u, n_l = Rotmag.solvemag(star_slow, mag, n_r = 3)
+r_ms, θs, v_ps, v_ts, n_uf, n_l = Rotmag.solvemag(star_fast, mag, n_r = 3)
 Rs = @. r_ms*sin(θs)^3
 rs = @. r_ms*sin(θs)^2
 plot(rs, n_u, linecolor = :red)
+plot!(rs, n_uf, linecolor = :blue)
 
 # r_ms, θs, v_ps, v_ts, slow_source_s = Rotmag.solvemag(star_slow, mag, n_r = 3)
 # plot!(rs, slow_source_s, linecolor = :blue)
