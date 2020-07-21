@@ -1,3 +1,5 @@
+# Specific file for testing purposes. Test Rotmag however you want!
+
 using Plots
 
 include("rotmag.jl")
