@@ -14,13 +14,19 @@ const c = 2.99792458e10
 const h = 6.626176e-27
 const kB = 1.380649e-16
 
+struct NoVelocitySolution <: Exception end
+struct OuterRadiusTooSmall <: Exception end
+
+Base.showerror(io::IO, e::NoVelocitySolution) = print(io, "can't find velocity solution")
+Base.showerror(io::IO, e::NoVelocitySolution) = print(io, "r_mo ≤ r_mi")
+
 struct Star{T<:Real}
 	R::T
 	M::T
 	T::T
 	v_esc::T
 	v_eq::T
-	function Star(;R = 2, M = 0.5, T = 4e3, v_eq = 10)
+	function Star(R, M, T, v_eq)
 		_R = float(R)
 		_M = float(M)
 		_T = float(T)
@@ -35,6 +41,9 @@ struct Magnetosphere{T<:Real}
 	M_dot::T
 	v_start::T
 	function Magnetosphere(r_mi, r_mo, M_dot, v_start)
+			if r_mo ≤ r_mi
+				throw(OuterRadiusTooSmall)
+			end
 			_r_mi = float(r_mi)
 			_r_mo = float(r_mo)
 			_M_dot = float(M_dot)
@@ -114,7 +123,13 @@ function nonsolidrotation(r :: Real, θ :: Real, star :: Star, mag :: Magnetosph
 	k = @. √(E - xreal^2)/Bp
 	Bϕ = @. xreal/k
 	ang_conservation = @. abs(v_eq*ρ/(Bϕ*R*(k - (4*π*η)^(-1)))-1)
-	v_t = xreal[ang_conservation .< 1e-10][1]
+	
+	v_t = try xreal[ang_conservation .< 1e-10][1]
+	catch e
+		if e isa(BoundsError)
+			throw(NoVelocitySolution)
+		end
+	end
 	v_p = √(E - v_t^2)
 	return [v_p, v_t]
 end

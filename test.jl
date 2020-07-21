@@ -5,8 +5,8 @@ using Plots
 include("rotmag.jl")
 import .Rotmag
 
-star_fast = Rotmag.Star(v_eq = 35)
-star_slow = Rotmag.Star(v_eq = 0)
+star_fast = Rotmag.Star(2, 0.5, 4000, 40)
+star_slow = Rotmag.Star(2, 0.5, 4000, 0)
 mag = Rotmag.Magnetosphere(2, 3, 1e-7, 10)
 
 function testderivative(r_m, star, mag; eps = 1e-6, n_θ = 20)
