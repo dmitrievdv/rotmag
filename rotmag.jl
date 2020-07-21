@@ -10,18 +10,22 @@ const M☉ = 1.989e33
 const year_seconds = 3.155e7
 const G = 6.67259e-8
 const σ = 5.77e-5
-const test_export = 0.223456789
+const c = 2.99792458e10
+const h = 6.626176e-27
+const kB = 1.380649e-16
 
 struct Star{T<:Real}
 	R::T
 	M::T
+	T::T
 	v_esc::T
 	v_eq::T
-	function Star(R, M, v_eq)
+	function Star(;R = 2, M = 0.5, T = 4e3, v_eq = 10)
 		_R = float(R)
 		_M = float(M)
+		_T = float(T)
 		_v_eq = float(v_eq) 
-    	new{typeof(_R)}(_R*R☉, _M*M☉, √(2*G*_M/_R*M☉/R☉), _v_eq*1e5)
+    	new{typeof(_R)}(_R, _M, _T, √(2*G*_M/_R*M☉/R☉), _v_eq)
 	end
 end
 
@@ -35,7 +39,7 @@ struct Magnetosphere{T<:Real}
 			_r_mo = float(r_mo)
 			_M_dot = float(M_dot)
 			_v_start = float(v_start)
-    	new{typeof(_r_mi)}(_r_mi, _r_mo, _M_dot, _v_start*1e5)
+    	new{typeof(_r_mi)}(_r_mi, _r_mo, _M_dot, _v_start)
 	end
 end
 
@@ -54,7 +58,7 @@ function freefallvelocitygradient(r, θ, star)
 end
 
 function surfmagfield(M_dot, R_in, star)
-	return 4.2e2*(R_in/2.2)*(star.M/(0.5*M☉))^0.25*(M_dot/1e-8)^0.5*(star.R/(2*R☉))^(-3)
+	return 4.2e2*(R_in/2.2)*(star.M/(0.5))^0.25*(M_dot/1e-8)^0.5*(star.R/(2))^(-3)
 end
 
 function dipolefield(surffield, r, θ)
@@ -69,7 +73,7 @@ end
 
 function eta(M_dot, r_mi, r_mo, star)
 	B_star = surfmagfield(M_dot, r_mi, star)
-	return 2.6e-9*(B_star/1e3)^(-1)*(M_dot/1e-8)*(star.R/(2*R☉))^-2*(1/r_mi-1/r_mo)^(-1)
+	return 2.6e-9*(B_star/1e3)^(-1)*(M_dot/1e-8)*(star.R/(2))^-2*(1/r_mi-1/r_mo)^(-1)
 end
 
 function constructpolynomial(ρ, E, R, v_eq, Bp, η)
@@ -92,8 +96,8 @@ function nonsolidrotation(r :: Real, θ :: Real, star :: Star, mag :: Magnetosph
 	B_star = surfmagfield(mag.M_dot, mag.r_mi, star)
 	Bp = dipolefield(B_star, r, θ)
 	v_ff = freefallvelocity(r, θ, star)
-	v_eq = star.v_eq
-	v_po = mag.v_start
+	v_eq = star.v_eq*1e5
+	v_po = mag.v_start*1e5
 	ρ = r_m^2 - R^2
 	E = v_po^2 + v_ff^2 - v_eq^2*ρ
 	P = constructpolynomial(ρ, E, R, v_eq, Bp, η)
@@ -119,8 +123,8 @@ function velocityjacobian(r :: Real, θ :: Real, v_p :: Real, v_t :: Real, star 
 	∇B_p = dipolefieldgradient(B_star, r, θ)
 	v_ff = freefallvelocity(r, θ, star)
 	∇v_ff = freefallvelocitygradient(r, θ, star)
-	v_eq = star.v_eq
-	v_po = mag.v_start
+	v_eq = star.v_eq*1e5
+	v_po = mag.v_start*1e5
 	∇r_m = [1/sin(θ)^2, -2r/sin(θ)^3*cos(θ)]
 	∇R = [sin(θ), r*cos(θ)]
 	ρ = r_m^2 - R^2
@@ -133,17 +137,10 @@ function velocityjacobian(r :: Real, θ :: Real, v_p :: Real, v_t :: Real, star 
 	x = v_t/v_eq
 	∇v_t = -v_eq*[∇P[1](x)/dP(x), ∇P[2](x)/dP(x)]
 	∇v_p = @. 1/v_p*(∇E/2 - v_t*∇v_t)
-	# v_p = √(E - v_t^2)
 	return [∇v_p, ∇v_t]
 end
 
-function directionalgradient(r, θ, α, β, v_p, v_t, ∇v_p, ∇v_t)
-	n = [cos(α), 1/r*sin(α)*cos(β),  1/r/sin(θ)*sin(α)*sin(β)]
-	nT = [cos(α) 1/r*sin(α)*cos(β) 1/r/sin(θ)*sin(α)*sin(β)]
-	∇n = [      0             -n[2]/r              -n[3]/r;
-		      r*n[2]          -n[1]/r           -n[3]/tan(θ);
-		  r*sin(θ)^2*n[3] sin(θ)*cos(θ)*n[3] -n[1]/r - n[2]/tan(θ)]
-
+function covariantvelocityjacobian(r, θ, v_p, v_t, ∇v_p, ∇v_t)
 	ξ = √(4 - 3sin(θ)^2)
 	k = [-2cos(θ)/ξ, -r*sin(θ)/ξ, 0]
 	t = [0, 0, r*sin(θ)]
@@ -166,6 +163,15 @@ function directionalgradient(r, θ, α, β, v_p, v_t, ∇v_p, ∇v_t)
 			 0 0      0]
 
 	∇v = v_p*∇k + k∇v_p + v_t*∇t + t∇v_t
+	return v, ∇v
+end
+
+function directionalgradient(r, θ, α, β, v, ∇v)
+	n = [cos(α), 1/r*sin(α)*cos(β),  1/r/sin(θ)*sin(α)*sin(β)]
+	∇n = [      0             -n[2]/r              -n[3]/r;
+		      r*n[2]          -n[1]/r           -n[3]/tan(θ);
+		  r*sin(θ)^2*n[3] sin(θ)*cos(θ)*n[3] -n[1]/r - n[2]/tan(θ)]
+
 	n∇vn = dot(n,(∇v*n + ∇n*v))
 	return n∇vn
 end
@@ -174,10 +180,11 @@ function integrategradalldirections(r, θ, v_p, v_t, ∇v_p, ∇v_t; n=100)
 	αs = [0:π/n:(n-1)*π/n;] .+ π/(2*n)
 	βs = [0:2*π/n:(n-1)*2*π/n;] .+ π/n
 	I = 0
+	v, ∇v = covariantvelocityjacobian(r, θ, v_p, v_t, ∇v_p, ∇v_t)
 	for α ∈ αs, β ∈ βs
-		I = I + abs(directionalgradient(r, θ, α, β, v_p, v_t, ∇v_p, ∇v_t))*sin(α)*π/n*2*π/n
+		I = I + abs(directionalgradient(r, θ, α, β, v, ∇v))*sin(α)
 	end
-	return I
+	return I*π/n*2*π/n
 end
 
 function integrategradstar(r, θ, v_p, v_t, ∇v_p, ∇v_t; n=100)
@@ -193,10 +200,11 @@ function integrategradstar(r, θ, v_p, v_t, ∇v_p, ∇v_t; n=100)
 	αs = -([0:ϕ/n:(n-1)*ϕ/n;] .- π) .+ ϕ/(2*n)
 	βs = [0:2*π/n:(n-1)*2*π/n;] .+ π/n
 	I = 0
+	v, ∇v = covariantvelocityjacobian(r, θ, v_p, v_t, ∇v_p, ∇v_t)
 	for α ∈ αs, β ∈ βs
-		I = I + abs(directionalgradient(r, θ, α, β, v_p, v_t, ∇v_p, ∇v_t))*sin(α)*ϕ/n*2*π/n
+		I = I + abs(directionalgradient(r, θ, α, β, v, ∇v))*sin(α)
 	end
-	return I
+	return I*ϕ/n*2*π/n
 end
 
 function calcsource(r, θ, v_p, v_t, ∇v_p, ∇v_t)
@@ -204,14 +212,44 @@ function calcsource(r, θ, v_p, v_t, ∇v_p, ∇v_t)
 	        integrategradalldirections(r, θ, v_p, v_t, ∇v_p, ∇v_t))
 end
 
-function solvemag(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 :: Int, file = "rotmag.dat")
-	# out = open(file, "w")
+function calcuplevel(source :: Real, T_star; n_l = 1e5, λ = 1.0830e4, g_u = 5, g_l = 3)
+	ν = c/(λ*1e-8)
+	# print(h*ν, "\n")
+	n_u = g_u/g_l*n_l/((exp(h*ν/(kB*T_star))-1)/source + 1)
+	return n_u
+end
+
+function solvemag(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 :: Int, modelname = "rotmag")
+	mkpath("models/popul")
+	mkpath("models/vel")
+	mkpath("models/data")
+	
+	datafile = "models/data/"*modelname*"_data.dat"
+    populfile = "models/popul/"*modelname*"_popul.dat"
+	velfile = "models/vel/"*modelname*"_vel.dat"
+	
+    dataout = open(datafile, "w")
+    println(dataout, "# Parameters for model "*modelname)
+	println(dataout, star.M, " # Mstar")
+	println(dataout, star.R, " # Rstar")
+	println(dataout, star.T, " # Tstar")
+	println(dataout, star.v_eq, " # equatorial rotation")
+	println(dataout, mag.M_dot, " # Mdot")
+	println(dataout, 7500, " # Tmag")
+	println(dataout, "# borders")
+	println(dataout, mag.r_mi, " # first")
+	println(dataout, mag.r_mo, " # second")
+	close(dataout)
+
 	B_star = surfmagfield(mag.M_dot, mag.r_mi, star)
 	θ_grid = zeros((n_θ, n_r))
 	r_m_grid = zeros((n_θ, n_r))
 	v_p_grid = zeros((n_θ, n_r))
 	v_t_grid = zeros((n_θ, n_r))
 	source_grid = zeros((n_θ, n_r))
+	n_u_grid = zeros((n_θ, n_r))
+	n_l_grid = fill(1e5, (n_θ, n_r))
+
 	for i=1:n_r
 		r_m = mag.r_mi + (i-1)*(mag.r_mo-mag.r_mi)/(n_r-1)
 		θ_s = asin(√(1/r_m))
@@ -225,15 +263,34 @@ function solvemag(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 
 			v_p, v_t = nonsolidrotation(r, θ, star, mag)
 			v_t_grid[j,i] = v_t
 			v_p_grid[j,i] = v_p
-			v_rot = star.v_eq*r_m*sin(θ)^3
 			∇v_p, ∇v_t = velocityjacobian(r, θ, v_p, v_t, star, mag)
 			source_grid[j,i] = calcsource(r, θ, v_p, v_t, ∇v_p, ∇v_t)
-			# @printf(out, "%8.f %8.f %8.f %8.f %8.f %8.f\n", r_m, θ, v_p*1e-5, v_t*1e-5, v_ff*1e-5, v_rot*1e-5)
+			n_u_grid[j,i] = calcuplevel(source_grid[j,i], star.T) 
 		end
-		# print(out, "\n")
 	end
-	# close(out)
-	return r_m_grid, θ_grid, v_p_grid, v_t_grid, source_grid
+
+	velout = open(velfile, "w")
+	println(velout, "# ", n_r, " ", n_θ)
+	println(velout, "#")
+	populout = open(populfile, "w")
+	println(populout, "# ", n_r, " ", n_θ)
+	println(populout, "#")
+	for i=1:n_r
+		r_m = mag.r_mi + (i-1)*(mag.r_mo-mag.r_mi)/(n_r-1)
+		θ_s = asin(√(1/r_m))
+		# solve_start = [star.v_esc/B_star, 0]
+		for j=n_θ:-1:1
+			@printf(populout, "%.2f %.7f %.4e %.4e %.4e %.4e \n", 
+			    r_m_grid[j,i], θ_grid[j,i], 1e4, source_grid[j,i], n_l_grid[j,i], n_u_grid[j,i])
+			@printf(velout, "%.2f %.7f %.4e %.4e\n", 
+			    r_m_grid[j,i], θ_grid[j,i], v_p_grid[j,i], v_t_grid[j,i])
+		end
+		print(populout, "\n")
+		print(velout, "\n")
+	end
+	close(velout)
+	close(populout)
+	return r_m_grid, θ_grid, v_p_grid, v_t_grid, n_u_grid, n_l_grid
 end
 
 function magvel(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 :: Int, file = "rotmag.dat")
@@ -265,7 +322,6 @@ function magvel(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 ::
 	# close(out)
 	return r_m_grid, θ_grid, v_p_grid, v_t_grid
 end
-
 end
 
 
