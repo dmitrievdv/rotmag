@@ -236,6 +236,7 @@ function solvemag(star :: Star, mag :: Magnetosphere; n_r = 5 :: Int, n_θ = 20 
 	println(dataout, star.v_eq, " # equatorial rotation")
 	println(dataout, mag.M_dot, " # Mdot")
 	println(dataout, 7500, " # Tmag")
+	println(dataout, "dipole # field type")
 	println(dataout, "# borders")
 	println(dataout, mag.r_mi, " # first")
 	println(dataout, mag.r_mo, " # second")
